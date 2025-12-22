@@ -30,13 +30,16 @@ using Test
     ]
     @test all(expected .== output_base_threaded)
 
-    output_job_schedulers_threaded = [
-        scrypt_threaded(ScryptParameters(1, 16, 1), Vector{UInt8}(b""), Vector{UInt8}(b""), 64, 0),
-        scrypt_threaded(ScryptParameters(2, 32, 2), Vector{UInt8}(b"password"), Vector{UInt8}(b"NaCl"), 64, 0),
-        scrypt_threaded(ScryptParameters(8, 1024, 16), Vector{UInt8}(b"password"), Vector{UInt8}(b"NaCl"), 64, 0),
-        scrypt_threaded(ScryptParameters(8, 16384, 1), Vector{UInt8}(b"pleaseletmein"), Vector{UInt8}(b"SodiumChloride"), 64, 0),
-        scrypt_threaded(ScryptParameters(8, 1048576, 1), Vector{UInt8}(b"pleaseletmein"), Vector{UInt8}(b"SodiumChloride"), 64, 0)
-    ]
+    if VERSION >= v"1.9.0"
+        output_job_schedulers_threaded = [
+            scrypt_threaded(ScryptParameters(1, 16, 1), Vector{UInt8}(b""), Vector{UInt8}(b""), 64, 0),
+            scrypt_threaded(ScryptParameters(2, 32, 2), Vector{UInt8}(b"password"), Vector{UInt8}(b"NaCl"), 64, 0),
+            scrypt_threaded(ScryptParameters(8, 1024, 16), Vector{UInt8}(b"password"), Vector{UInt8}(b"NaCl"), 64, 0),
+            scrypt_threaded(ScryptParameters(8, 16384, 1), Vector{UInt8}(b"pleaseletmein"), Vector{UInt8}(b"SodiumChloride"), 64, 0),
+            scrypt_threaded(ScryptParameters(8, 1048576, 1), Vector{UInt8}(b"pleaseletmein"), Vector{UInt8}(b"SodiumChloride"), 64, 0)
+        ]
 
-    @test all(expected .== output_job_schedulers_threaded)
+        @test all(expected .== output_job_schedulers_threaded)
+    end
+    
 end

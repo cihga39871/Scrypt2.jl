@@ -71,7 +71,7 @@ It uses `Base.Threads` to parallelize the computation if `parameters.p > 1`.
 
 ### `scrypt_threaded` (parallel using JobSchedulers package)
 
-Note: The following methods are only available when you `using JobSchedulers`.
+> **Compat:** The following methods are only available for Julia version >=v1.9.0 and when you `using JobSchedulers`.
 
 ```julia
 scrypt_threaded(parameters::ScryptParameters, key::Vector{UInt8}, derivedkeylength::Integer, job_priority::Int)
@@ -85,6 +85,9 @@ It uses `JobSchedulers.jl` to parallelize the computation if `parameters.p > 1`.
 ## Consistency and Speed Benchmark with Scrypt.jl
 
 Test using Julia v1.12.1 (20 threads), Scrypt v0.2.1, Scrypt2 v1.0.0.
+
+The general concept is to test different parameters with random keys and salts, and compute the average time and memory used for each scrypt function.
+
 Test script is as follows:
 
 ```julia
