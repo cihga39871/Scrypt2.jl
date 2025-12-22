@@ -47,7 +47,9 @@ Parameters:
 
 - `r::Int`: Block size factor. Affects how much memory is used per "chunk" of work. Must be > 0.
 - `N::Int`: CPU/Memory cost factor. The biggest number — controls how much memory and time the function uses. Higher N = more secure, but also slower and uses more memory. Must be a power of 2, > 1.
-- `p::Int`: Parallelization factor. How many independent tasks can run at the same time. Higher p = uses more CPU cores, but also multiplies the total memory needed. Must be > 0.
+- `p::Int`: Parallelization factor. How many independent tasks can run at the same time. Higher p = uses more CPU cores, but also multiplies the total memory. Must be > 0.
+
+Note: In Scrypt2.jl, if you use single-threaded `scrypt` with `p>1`, memory buffer will be reused, so the peak memory is roughly `1/p` of parallel version `scrypt_threaded`.
 
 ### `scrypt`
 

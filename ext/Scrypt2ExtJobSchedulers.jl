@@ -23,12 +23,12 @@ function Scrypt2.scrypt_threaded(parameters::ScryptParameters, key::Vector{UInt8
     jobs = Job[]
     for i ∈ 1:parameters.p
         job = Job(; priority = job_priority) do 
-            workingbuffer_new = Matrix{UInt32}(undef, (16, Scrypt2.elementblockcount(parameters)))
-            shufflebuffer_new = Matrix{UInt32}(undef, (16, Scrypt2.elementblockcount(parameters)))
-            scryptblock_new = Array{UInt32,3}(undef, 16, 2*parameters.r, parameters.N);
+            workingbuffer = Matrix{UInt32}(undef, (16, Scrypt2.elementblockcount(parameters)))
+            shufflebuffer = Matrix{UInt32}(undef, (16, Scrypt2.elementblockcount(parameters)))
+            scryptblock = Array{UInt32,3}(undef, 16, 2*parameters.r, parameters.N);
 
-            element_new = @view(parallelbuffer[:, :, i])
-            Scrypt2.smix_new!(scryptblock_new, workingbuffer_new, shufflebuffer_new, element_new, parameters)
+            element = @view(parallelbuffer[:, :, i])
+            Scrypt2.smix!(scryptblock, workingbuffer, shufflebuffer, element, parameters)
         end
         submit!(job)
         push!(jobs, job)
