@@ -6,7 +6,10 @@ Scrypt is a password-based key derivation function (KDF) designed to be **memory
 
 This package is a rewritten version of Nicholas Bauer's [Scrypt.jl](https://github.com/BioTurboNick/Scrypt.jl). I would like to thank Nicholas for making his original work open source — without it, this package would not have been possible.
 
-The package uses the same algorithm as Scrypt.jl, but improves speed and RAM allocations (see consistency test and benchmark at the end of README). Besides, Scrypt2 also supports multi-threading using `Base.Threads` or [`JobSchedulers.jl`](https://github.com/cihga39871/JobSchedulers.jl).
+The package uses the same algorithm as Scrypt.jl, and
+
+- improves speed (**>2X faster**) and RAM allocations (see benchmark at the end of README);
+- supports **multi-threading** using `Base.Threads` or [`JobSchedulers.jl`](https://github.com/cihga39871/JobSchedulers.jl).
 
 ## Quick Usage
 
@@ -77,46 +80,124 @@ scrypt_threaded(parameters::ScryptParameters, key::Vector{UInt8}, salt::Vector{U
 
 It uses `JobSchedulers.jl` to parallelize the computation if `parameters.p > 1`. To use `Base.Threads` for parallelization, please use the `scrypt_threaded` function without the `job_priority` argument.
 
-## Consistency with Scrypt.jl
+## Consistency and Speed Benchmark with Scrypt.jl
 
-The consistency is tested with the following scrypt:
+Test using Julia v1.12.1 (20 threads), Scrypt v0.2.1, Scrypt2 v1.0.0.
+Test script is as follows:
 
 ```julia
-# julia -t 16
+# julia -t 20
+
 import Scrypt
 import Scrypt2
 using Test
 
-function consistency_test(r::Int, N::Int, p::Int; num_test=100) # r,N,p: Scrypt parameters
+function gcdff_add(a::Base.GC_Diff, b::Base.GC_Diff)
+    Base.GC_Diff((getfield(a, f) + getfield(b, f) for f in fieldnames(Base.GC_Diff))...)
+end
+
+function timed_add(a, b)
+    return (
+        time = a.time + b.time,
+        bytes = a.bytes + b.bytes,
+        gctime = a.gctime + b.gctime,
+        gcstats = gcdff_add(a.gcstats, b.gcstats),
+        lock_conflicts = a.lock_conflicts + b.lock_conflicts,
+        compile_time = a.compile_time + b.compile_time,
+        recompile_time = a.recompile_time + b.recompile_time
+    )
+end
+
+function timed_avg(a, num_test::Int)
+    return (
+        time = a.time / num_test,
+        bytes = a.bytes ÷ num_test,
+        gctime = a.gctime / num_test,
+        gcstats = Base.GC_Diff((getfield(a.gcstats, f) ÷ num_test for f in fieldnames(Base.GC_Diff))...),
+        lock_conflicts = a.lock_conflicts ÷ num_test,
+        compile_time = a.compile_time / num_test,
+        recompile_time = a.recompile_time / num_test
+    )
+end
+
+function consistency_test_and_benchmark(r::Int, N::Int, p::Int; num_test=100) # r,N,p: Scrypt parameters
     param = Scrypt.ScryptParameters(r,N,p)
     param2 = Scrypt2.ScryptParameters(r,N,p)
 
-    @testset "Scrypt Consistency Tests: 1, 6, 1" begin
-        for i in 1:100
+    old_timed_add = @timed nothing
+    new_timed_add = @timed nothing
+    new_threaded_timed_add = @timed nothing
+
+    @testset "Scrypt Consistency Tests: ScryptParameters($r, $N, $p)" begin
+        for i in 1:num_test
             key = rand(UInt8, rand(1:128))
             salt = rand(UInt8, rand(0:64))
             dklen = rand(16:128)
 
-            old = Scrypt.scrypt(param, key, salt, dklen)
-            if p == 1
-                new = Scrypt2.scrypt(param2, key, salt, dklen)
-            else
-                new = Scrypt2.scrypt_threaded(param2, key, salt, dklen)
-            end
+            old = @timed Scrypt.scrypt(param, key, salt, dklen)
+            new = @timed Scrypt2.scrypt(param2, key, salt, dklen)
 
-            @test old == new
+            @test old.value == new.value
+
+            old_timed_add = timed_add(old_timed_add, old)
+            new_timed_add = timed_add(new_timed_add, new)
+
+            if p > 1
+                new_threaded = @timed Scrypt2.scrypt_threaded(param2, key, salt, dklen)
+                @test new.value == new_threaded.value
+                new_threaded_timed_add = timed_add(new_threaded_timed_add, new_threaded)
+            end
         end
     end
+    
+    old = timed_avg(old_timed_add, num_test)
+    new = timed_avg(new_timed_add, num_test)
+    diff = round(old.time / new.time; digits=2)
+
+    println(Base.stdout, "ScryptParameters($r, $N, $p):")
+    println(Base.stdout, "  $(diff)X faster")
+    Base.time_print(Base.stdout, old.time * 1.0e9, old.gcstats.allocd, old.gcstats.total_time, Base.gc_alloc_count(old.gcstats), old.lock_conflicts, old.compile_time * 1.0e9, old.recompile_time * 1.0e9, true; msg = "  old           ")
+    Base.time_print(Base.stdout, new.time * 1.0e9, new.gcstats.allocd, new.gcstats.total_time, Base.gc_alloc_count(new.gcstats), new.lock_conflicts, new.compile_time * 1.0e9, new.recompile_time * 1.0e9, true; msg = "  new           ")
+
+    if p > 1
+        new_threaded = timed_avg(new_threaded_timed_add, num_test)
+        Base.time_print(Base.stdout, new_threaded.time * 1.0e9, new_threaded.gcstats.allocd, new_threaded.gcstats.total_time, Base.gc_alloc_count(new_threaded.gcstats), new_threaded.lock_conflicts, new_threaded.compile_time * 1.0e9, new_threaded.recompile_time * 1.0e9, true; msg = "  new (threaded)")
+    end
+    println()
 end
 
 @testset "Scrypt Consistency Tests" begin
-    consistency_test(1, 16, 1; num_test=100)
-    consistency_test(2, 32, 2; num_test=100)
-    consistency_test(8, 1024, 16; num_test=50)
-    consistency_test(8, 16384, 1; num_test=10)
-    consistency_test(8, 1048576, 1; num_test=3)
-end
-    
+    consistency_test_and_benchmark(1, 16, 1; num_test=100)
+    consistency_test_and_benchmark(8, 1024, 16; num_test=50)
+    consistency_test_and_benchmark(8, 16384, 1; num_test=50)
+    consistency_test_and_benchmark(8, 1048576, 1; num_test=3)
+end;
+```
 
+Results:
 
+```julia
+ScryptParameters(1, 16, 1)
+  2.42X faster
+  old           : 0.000021 seconds (165 allocations: 32.411 KiB)
+  new           : 0.000009 seconds (51 allocations: 5.779 KiB)
+
+ScryptParameters(8, 1024, 16)
+  2.54X faster
+  old           : 0.088445 seconds (11.29 k allocations: 20.903 MiB, 3.33% gc time)
+  new           : 0.034788 seconds (145 allocations: 1.082 MiB, 0.33% gc time)
+  new (threaded): 0.005224 seconds (352 allocations: 16.124 MiB, 21.43% gc time)
+
+ScryptParameters(8, 16384, 1)
+  2.23X faster
+  old           : 0.088902 seconds (753 allocations: 16.076 MiB, 1.69% gc time)
+  new           : 0.039811 seconds (53 allocations: 16.009 MiB, 4.51% gc time)
+
+ScryptParameters(8, 1048576, 1)
+  2.09X faster
+  old           : 5.808510 seconds (760 allocations: 1.000 GiB, 0.84% gc time)
+  new           : 2.773725 seconds (53 allocations: 1.000 GiB, 2.65% gc time)
+
+Test Summary:            | Pass  Total   Time
+Scrypt Consistency Tests |  253    253  38.6s
 ```
