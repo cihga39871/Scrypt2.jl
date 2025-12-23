@@ -42,7 +42,7 @@ function FastScrypt.scrypt_threaded(parameters::ScryptParameters, key::Vector{UI
 end 
 
 function FastScrypt.scrypt_threaded(parameters::ScryptParameters, key::Vector{UInt8}, derivedkeylength::Integer, job_priority::Int)
-    scrypt_threaded(parameters, key, EMPTY_SALT, derivedkeylength, job_priority)
+    scrypt_threaded(parameters, key, FastScrypt.EMPTY_SALT, derivedkeylength, job_priority)
 end
 
 # @setup_workload begin
